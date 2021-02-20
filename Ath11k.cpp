@@ -810,24 +810,22 @@ err_hal_srng_deinit:
 	return ret;
 }
 
-void Ath11k::ath11k_core_halt(struct ath11k *ar)
+void Ath11k::ath11k_core_halt()
 {
-	struct ath11k_base *ab = ar->ab;
+	lockdep_assert_held(&conf_mutex);
 
-	lockdep_assert_held(&ar->conf_mutex);
+	num_created_vdevs = 0;
+	allocated_vdev_map = 0;
 
-	ar->num_created_vdevs = 0;
-	ar->allocated_vdev_map = 0;
+	ath11k_mac_scan_finish(this);
+	ath11k_mac_peer_cleanup_all(this);
+	cancel_delayed_work_sync(&scan.timeout);
+	cancel_work_sync(&regd_update_work);
 
-	ath11k_mac_scan_finish(ar);
-	ath11k_mac_peer_cleanup_all(ar);
-	cancel_delayed_work_sync(&ar->scan.timeout);
-	cancel_work_sync(&ar->regd_update_work);
-
-	rcu_assign_pointer(ab->pdevs_active[ar->pdev_idx], NULL);
+	rcu_assign_pointer(ab->pdevs_active[pdev_idx], NULL);
 	synchronize_rcu();
-	INIT_LIST_HEAD(&ar->arvifs);
-	idr_init(&ar->txmgmt_idr);
+	INIT_LIST_HEAD(&arvifs);
+	idr_init(&txmgmt_idr);
 }
 
 void ath11k_core_restart(struct work_struct *work)
@@ -835,13 +833,14 @@ void ath11k_core_restart(struct work_struct *work)
 	struct ath11k_base *ab = container_of(work, struct ath11k_base, restart_work);
 	struct ath11k *ar;
 	struct ath11k_pdev *pdev;
-	int i, ret = 0;
+	int i;
 
 	spin_lock_bh(&ab->base_lock);
-	ab->stats.fw_crash_counter++;
+	++ab->stats.fw_crash_counter;
 	spin_unlock_bh(&ab->base_lock);
 
-	for (i = 0; i < ab->num_radios; i++) {
+	for (i = 0; i < ab->num_radios; ++i)
+	{
 		pdev = &ab->pdevs[i];
 		ar = pdev->ar;
 		if (!ar || ar->state == ATH11K_STATE_OFF)
@@ -868,13 +867,14 @@ void ath11k_core_restart(struct work_struct *work)
 	wake_up(&ab->wmi_ab.tx_credits_wq);
 	wake_up(&ab->peer_mapping_wq);
 
-	ret = ath11k_core_reconfigure_on_crash(ab);
-	if (ret) {
+	if (ath11k_core_reconfigure_on_crash(ab))
+	{
 		ath11k_err(ab, "failed to reconfigure driver on crash recovery\n");
 		return;
 	}
 
-	for (i = 0; i < ab->num_radios; i++) {
+	for (i = 0; i < ab->num_radios; ++i)
+	{
 		pdev = &ab->pdevs[i];
 		ar = pdev->ar;
 		if (!ar || ar->state == ATH11K_STATE_OFF)
@@ -882,16 +882,15 @@ void ath11k_core_restart(struct work_struct *work)
 
 		mutex_lock(&ar->conf_mutex);
 
-		switch (ar->state) {
+		switch (ar->state)
+		{
 		case ATH11K_STATE_ON:
 			ar->state = ATH11K_STATE_RESTARTING;
 			ath11k_core_halt(ar);
 			ieee80211_restart_hw(ar->hw);
 			break;
 		case ATH11K_STATE_OFF:
-			ath11k_warn(ab,
-				    "cannot restart radio %d that hasn't been started\n",
-				    i);
+			ath11k_warn(ab, "cannot restart radio %d that hasn't been started\n", i);
 			break;
 		case ATH11K_STATE_RESTARTING:
 			break;
@@ -899,8 +898,7 @@ void ath11k_core_restart(struct work_struct *work)
 			ar->state = ATH11K_STATE_WEDGED;
 			fallthrough;
 		case ATH11K_STATE_WEDGED:
-			ath11k_warn(ab,
-				    "device is wedged, will not restart radio %d\n", i);
+			ath11k_warn(ab, "device is wedged, will not restart radio %d\n", i);
 			break;
 		}
 		mutex_unlock(&ar->conf_mutex);
@@ -908,54 +906,41 @@ void ath11k_core_restart(struct work_struct *work)
 	complete(&ab->driver_recovery);
 }
 
-int ath11k_init_hw_params(struct ath11k_base *ab)
+bool ath11k_init_hw_params(struct ath11k_base *ab)
 {
-	const struct ath11k_hw_params *hw_params = NULL;
-	int i;
-
-	for (i = 0; i < ARRAY_SIZE(ath11k_hw_params); i++) {
-		hw_params = &ath11k_hw_params[i];
-
-		if (hw_params->hw_rev == ab->hw_rev)
-			break;
+	for (int i = 0; i < ARRAY_SIZE(ath11k_hw_params); ++i)
+	{
+		if (ath11k_hw_params[i].hw_rev == ab->hw_rev)
+		{
+			ab->hw_params = hw_params;
+			ath11k_dbg(ab, ATH11K_DBG_BOOT, "Hardware name %s\n", ab->hw_params.name);
+			return true;
+		}
 	}
 
-	if (i == ARRAY_SIZE(ath11k_hw_params)) {
-		ath11k_err(ab, "Unsupported hardware version: 0x%x\n", ab->hw_rev);
-		return -EINVAL;
-	}
-
-	ab->hw_params = *hw_params;
-
-	ath11k_dbg(ab, ATH11K_DBG_BOOT, "Hardware name %s\n", ab->hw_params.name);
-
-	return 0;
+	return false;
 }
 
-int Ath11k::ath11k_core_pre_init(struct ath11k_base *ab)
+bool Ath11k::ath11k_core_pre_init(struct ath11k_base *ab)
 {
-	int ret;
-
-	ret = ath11k_init_hw_params(ab);
-	if (ret) {
-		ath11k_err(ab, "failed to get hw params: %d\n", ret);
-		return ret;
+	if (ath11k_init_hw_params(ab))
+	{
+		ath11k_err(ab, "failed to get hw params: %d\n");
+		return false;
 	}
 
 	return 0;
 }
 
-int Ath11k::ath11k_core_init(struct ath11k_base *ab)
+bool Ath11k::ath11k_core_init(struct ath11k_base *ab)
 {
-	int ret;
-
-	ret = ath11k_core_soc_create(ab);
-	if (ret) {
-		ath11k_err(ab, "failed to create soc core: %d\n", ret);
-		return ret;
+	if (ath11k_core_soc_create(ab))
+	{
+		ath11k_err(ab, "failed to create soc core: %d\n");
+		return false;
 	}
 
-	return 0;
+	return true;
 }
 
 void Ath11k::ath11k_core_deinit(struct ath11k_base *ab)
