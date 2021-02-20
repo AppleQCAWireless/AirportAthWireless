@@ -441,135 +441,6 @@ struct ath11k_per_peer_tx_stats
 #define ATH11K_FLUSH_TIMEOUT (5 * HZ)
 #define ATH11K_VDEV_DELETE_TIMEOUT_HZ (5 * HZ)
 
-struct ath11k
-{
-	struct ath11k_base *ab;
-	struct ath11k_pdev *pdev;
-	struct ieee80211_hw *hw;
-	struct ieee80211_ops *ops;
-	struct ath11k_pdev_wmi *wmi;
-	struct ath11k_pdev_dp dp;
-	u8 mac_addr[ETH_ALEN];
-	u32 ht_cap_info;
-	u32 vht_cap_info;
-	struct ath11k_he ar_he;
-	enum ath11k_state state;
-	bool supports_6ghz;
-	struct {
-		struct completion started;
-		struct completion completed;
-		struct completion on_channel;
-		struct delayed_work timeout;
-		enum ath11k_scan_state state;
-		bool is_roc;
-		int vdev_id;
-		int roc_freq;
-		bool roc_notify;
-	} scan;
-
-	struct {
-		struct ieee80211_supported_band sbands[NUM_NL80211_BANDS];
-		struct ieee80211_sband_iftype_data
-			iftype[NUM_NL80211_BANDS][NUM_NL80211_IFTYPES];
-	} mac;
-
-	unsigned long dev_flags;
-	unsigned int filter_flags;
-	unsigned long monitor_flags;
-	u32 min_tx_power;
-	u32 max_tx_power;
-	u32 txpower_limit_2g;
-	u32 txpower_limit_5g;
-	u32 txpower_scale;
-	u32 power_scale;
-	u32 chan_tx_pwr;
-	u32 num_stations;
-	u32 max_num_stations;
-	bool monitor_present;
-	/* To synchronize concurrent synchronous mac80211 callback operations,
-	 * concurrent debugfs configuration and concurrent FW statistics events.
-	 */
-	struct mutex conf_mutex;
-	/* protects the radio specific data like debug stats, ppdu_stats_info stats,
-	 * vdev_stop_status info, scan data, ath11k_sta info, ath11k_vif info,
-	 * channel context data, survey info, test mode data.
-	 */
-	spinlock_t data_lock;
-
-	struct list_head arvifs;
-	/* should never be NULL; needed for regular htt rx */
-	struct ieee80211_channel *rx_channel;
-
-	/* valid during scan; needed for mgmt rx during scan */
-	struct ieee80211_channel *scan_channel;
-
-	u8 cfg_tx_chainmask;
-	u8 cfg_rx_chainmask;
-	u8 num_rx_chains;
-	u8 num_tx_chains;
-	/* pdev_idx starts from 0 whereas pdev->pdev_id starts with 1 */
-	u8 pdev_idx;
-	u8 lmac_id;
-
-	struct completion peer_assoc_done;
-	struct completion peer_delete_done;
-
-	int install_key_status;
-	struct completion install_key_done;
-
-	int last_wmi_vdev_start_status;
-	struct completion vdev_setup_done;
-	struct completion vdev_delete_done;
-
-	int num_peers;
-	int max_num_peers;
-	u32 num_started_vdevs;
-	u32 num_created_vdevs;
-	unsigned long long allocated_vdev_map;
-
-	struct idr txmgmt_idr;
-	/* protects txmgmt_idr data */
-	spinlock_t txmgmt_idr_lock;
-	atomic_t num_pending_mgmt_tx;
-
-	/* cycle count is reported twice for each visited channel during scan.
-	 * access protected by data_lock
-	 */
-	u32 survey_last_rx_clear_count;
-	u32 survey_last_cycle_count;
-
-	/* Channel info events are expected to come in pairs without and with
-	 * COMPLETE flag set respectively for each channel visit during scan.
-	 *
-	 * However there are deviations from this rule. This flag is used to
-	 * avoid reporting garbage data.
-	 */
-	bool ch_info_can_report_survey;
-	struct survey_info survey[ATH11K_NUM_CHANS];
-	struct completion bss_survey_done;
-
-	struct work_struct regd_update_work;
-
-	struct work_struct wmi_mgmt_tx_work;
-	struct sk_buff_head wmi_mgmt_tx_queue;
-
-	struct ath11k_per_peer_tx_stats peer_tx_stats;
-	struct list_head ppdu_stats_info;
-	u32 ppdu_stat_list_depth;
-
-	struct ath11k_per_peer_tx_stats cached_stats;
-	u32 last_ppdu_id;
-	u32 cached_ppdu_id;
-#ifdef CONFIG_ATH11K_DEBUGFS
-	struct ath11k_debug debug;
-#endif
-#ifdef CONFIG_ATH11K_SPECTRAL
-	struct ath11k_spectral spectral;
-#endif
-	bool dfs_block_radar_events;
-	struct ath11k_thermal thermal;
-};
-
 struct ath11k_band_cap
 {
 	u32 phy_id;
@@ -957,13 +828,138 @@ static inline const char *ath11k_bus_str(enum ath11k_bus bus)
 class Ath11k
 {
 protected:
-    unsigned int ath11k_debug_mask;
-    unsigned int ath11k_crypto_mode; //crypto mode: 0-hardware, 1-software
-    unsigned int aht11k_frame_mode = ATH11K_HW_TXRX_NATIVE_WIFI; //Datapath frame mode (0: raw, 1: native wifi (default), 2: ethernet)
-    bool ath11k_cold_boot_cal;
-    
-    ath11k_base * ab;
-    
+	ath11k_base * ab;
+	ath11k_base *ab;
+	ath11k_pdev *pdev;
+	ieee80211_hw *hw;
+	ieee80211_ops *ops;
+	ath11k_pdev_wmi *wmi;
+	ath11k_pdev_dp dp;
+	u8 mac_addr[ETH_ALEN];
+	u32 ht_cap_info;
+	u32 vht_cap_info;
+	ath11k_he ar_he;
+	enum ath11k_state state;
+	unsigned int ath11k_debug_mask;
+	unsigned int ath11k_crypto_mode; //crypto mode: 0-hardware, 1-software
+	unsigned int aht11k_frame_mode = ATH11K_HW_TXRX_NATIVE_WIFI; //Datapath frame mode (0: raw, 1: native wifi (default), 2: ethernet)
+	bool ath11k_cold_boot_cal;
+	bool supports_6ghz;
+	struct scan 
+	{
+		struct completion started;
+		struct completion completed;
+		struct completion on_channel;
+		struct delayed_work timeout;
+		enum ath11k_scan_state state;
+		bool is_roc;
+		int vdev_id;
+		int roc_freq;
+		bool roc_notify;
+	};
+
+	struct mac
+	{
+		ieee80211_supported_band sbands[NUM_NL80211_BANDS];
+		ieee80211_sband_iftype_data iftype[NUM_NL80211_BANDS][NUM_NL80211_IFTYPES];
+	};
+
+	unsigned long dev_flags;
+	unsigned int filter_flags;
+	unsigned long monitor_flags;
+	u32 min_tx_power;
+	u32 max_tx_power;
+	u32 txpower_limit_2g;
+	u32 txpower_limit_5g;
+	u32 txpower_scale;
+	u32 power_scale;
+	u32 chan_tx_pwr;
+	u32 num_stations;
+	u32 max_num_stations;
+	bool monitor_present;
+	/* To synchronize concurrent synchronous mac80211 callback operations,
+	 * concurrent debugfs configuration and concurrent FW statistics events.
+	 */
+	struct mutex conf_mutex;
+	/* protects the radio specific data like debug stats, ppdu_stats_info stats,
+	 * vdev_stop_status info, scan data, ath11k_sta info, ath11k_vif info,
+	 * channel context data, survey info, test mode data.
+	 */
+	spinlock_t data_lock;
+
+	struct list_head arvifs;
+	/* should never be NULL; needed for regular htt rx */
+	struct ieee80211_channel *rx_channel;
+
+	/* valid during scan; needed for mgmt rx during scan */
+	struct ieee80211_channel *scan_channel;
+
+	u8 cfg_tx_chainmask;
+	u8 cfg_rx_chainmask;
+	u8 num_rx_chains;
+	u8 num_tx_chains;
+	/* pdev_idx starts from 0 whereas pdev->pdev_id starts with 1 */
+	u8 pdev_idx;
+	u8 lmac_id;
+
+	struct completion peer_assoc_done;
+	struct completion peer_delete_done;
+
+	int install_key_status;
+	struct completion install_key_done;
+
+	int last_wmi_vdev_start_status;
+	struct completion vdev_setup_done;
+	struct completion vdev_delete_done;
+
+	int num_peers;
+	int max_num_peers;
+	u32 num_started_vdevs;
+	u32 num_created_vdevs;
+	unsigned long long allocated_vdev_map;
+
+	struct idr txmgmt_idr;
+	/* protects txmgmt_idr data */
+	spinlock_t txmgmt_idr_lock;
+	atomic_t num_pending_mgmt_tx;
+
+	/* cycle count is reported twice for each visited channel during scan.
+	 * access protected by data_lock
+	 */
+	u32 survey_last_rx_clear_count;
+	u32 survey_last_cycle_count;
+
+	/* Channel info events are expected to come in pairs without and with
+	 * COMPLETE flag set respectively for each channel visit during scan.
+	 *
+	 * However there are deviations from this rule. This flag is used to
+	 * avoid reporting garbage data.
+	 */
+	bool ch_info_can_report_survey;
+	struct survey_info survey[ATH11K_NUM_CHANS];
+	struct completion bss_survey_done;
+
+	struct work_struct regd_update_work;
+
+	struct work_struct wmi_mgmt_tx_work;
+	struct sk_buff_head wmi_mgmt_tx_queue;
+
+	struct ath11k_per_peer_tx_stats peer_tx_stats;
+	struct list_head ppdu_stats_info;
+	u32 ppdu_stat_list_depth;
+
+	struct ath11k_per_peer_tx_stats cached_stats;
+	u32 last_ppdu_id;
+	u32 cached_ppdu_id;
+#ifdef CONFIG_ATH11K_DEBUGFS
+	ath11k_debug debug;
+#endif
+#ifdef CONFIG_ATH11K_SPECTRAL
+	ath11k_spectral spectral;
+#endif
+	bool dfs_block_radar_events;
+	ath11k_thermal thermal;
+	
 public:
     void ath11k_peer_unmap_event(struct ath11k_base *ab, u16 peer_id);
     void ath11k_peer_map_event(struct ath11k_base *ab, u8 vdev_id, u16 peer_id, u8 *mac_addr, u16 ast_hash);
@@ -979,7 +975,7 @@ public:
     int ath11k_core_fetch_bdf(struct ath11k_base *ath11k, struct ath11k_board_data *bd);
     void ath11k_core_free_bdf(struct ath11k_base *ab, struct ath11k_board_data *bd);
     int ath11k_core_check_dt(struct ath11k_base *ath11k);
-    void ath11k_core_halt(struct ath11k *ar);
+    void ath11k_core_halt();
     int ath11k_core_resume(struct ath11k_base *ab);
     int ath11k_core_suspend(struct ath11k_base *ab);
     const firmware *ath11k_core_firmware_request(struct ath11k_base *ab, const char *filename);
